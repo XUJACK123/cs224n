@@ -70,9 +70,25 @@ def eval_model_on_gsm8k() -> None:
     Think about: What metric will you use to evaluate performance? How will you 
     handle cases where the model's output cannot be parsed?
     """
-    # TODO complete for question 2bi
-
-    pass
+    dataset = []
+    with open("data/gsm8k_first_100.jsonl", "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        dataset.append(json.loads(line))
+    total_samples = len(dataset)
+    for model_id in ["A", "B"]:
+        correct = 0
+        for item in dataset:
+            prompt = standard_prompt_template(item['question'])
+            response = query_model(model_id, Query(turns=[{"user": prompt}]))
+            extracted = standard_output_extractor(response.text)
+            if extracted != INVALID_ANS:
+                try:
+                    if float(extracted) == float(item["numerical_answer"]):
+                        correct += 1
+                except ValueError:
+                    pass
+        print(f"{model_id}: {correct}/{total_samples}")
 
 
 
@@ -91,18 +107,42 @@ def superior_prompt_template(question: str) -> str:
     NOTE: Your prompt must still produce output in the "#### <answer>" format
     so that standard_output_extractor() can parse the response.
     """
-    # TODO complete for question 2bii
+    return f"""please follow the following steps, 1.break down the problem 2.Solve the problem step-by-step 3.the result of the answer should be #### <answer> and the answer should be number only
+    Problem: {question}""".strip()
 
-    pass
-
-def eval_model_on_gsm8k_with_improved_prompt() -> None:
+def eval_model_on_gsm8k_with_improved_prompt(model_id: str) -> None:
     """
     Evaluate model A using your superior_prompt_template.
     """
     # TODO complete for question 2bii
+    correct = 0
+    total = 0
+    with open("data/gsm8k_first_100.jsonl", "r", encoding="utf-8") as f:
+        for line in f:
+            item = json.loads(line)
+            question = item["question"]
+            gt_str = standard_output_extractor(item["answer"])
+            try:
+                gt_str = float(gt_str)
+            except(ValueError, TypeError):
+                continue
+            prompt = superior_prompt_template(question)
+            query_obj = Query(turns=[{"user": prompt}])
+            response = query_model(model_id, query_obj)
+            model_output = response.text
+            pred_str = standard_output_extractor(model_output)
+            if pred_str != INVALID_ANS:
+                try:
+                    pred_val = float(pred_str)
+                    if abs(pred_val - gt_str) < 1e-5:
+                        correct += 1
+                except (ValueError, TypeError):
+                    pass  # 转换失败视作回答无效（算错）
 
-    pass
+            total += 1
 
+    accuracy = correct / total if total > 0 else 0.0
+    return accuracy
 if __name__=="__main__":
 
     load_dotenv()
